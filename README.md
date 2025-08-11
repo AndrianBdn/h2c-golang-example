@@ -1,5 +1,100 @@
 ## HTTP/2 Cleartext (H2C) golang example
 
+### Important Note: Go 1.24+ Native H2C Support
+
+**Starting from Go 1.24, HTTP/2 Cleartext (H2C) is supported natively in the standard library!** This means you no longer need the `golang.org/x/net/http2/h2c` package or workarounds for H2C support.
+
+#### Native H2C Examples (Go 1.24+)
+
+Full working examples are available in the `cmd-1_24` directory:
+- **Server**: [`cmd-1_24/server/main.go`](cmd-1_24/server/main.go)
+- **Client**: [`cmd-1_24/client/main.go`](cmd-1_24/client/main.go)
+
+##### Server Example
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+    "net/http"
+)
+
+func main() {
+    // Configure protocols for H2C-only support
+    protocols := new(http.Protocols)
+    protocols.SetUnencryptedHTTP2(true)  // Enable H2C
+    protocols.SetHTTP1(false)            // Explicitly disable HTTP/1.1
+    protocols.SetHTTP2(false)            // Explicitly disable encrypted HTTP/2
+    // Note: You can enable other protocols as needed
+
+    handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "Hello from %s! Protocol: HTTP/%d.%d\n", 
+            r.URL.Path, r.ProtoMajor, r.ProtoMinor)
+    })
+
+    server := &http.Server{
+        Addr:      ":8080",
+        Handler:   handler,
+        Protocols: protocols,
+    }
+
+    log.Println("Server listening with H2C support on :8080")
+    log.Fatal(server.ListenAndServe())
+}
+```
+
+##### Client Example
+
+```go
+package main
+
+import (
+    "fmt"
+    "io"
+    "log"
+    "net/http"
+)
+
+func main() {
+    // Configure protocols for H2C-only support
+    protocols := new(http.Protocols)
+    protocols.SetUnencryptedHTTP2(true)  // Enable H2C
+    protocols.SetHTTP1(false)            // Explicitly disable HTTP/1.1
+    protocols.SetHTTP2(false)            // Explicitly disable encrypted HTTP/2
+
+    // Create client with inline transport configuration
+    client := &http.Client{
+        Transport: &http.Transport{
+            Protocols: protocols,
+        },
+    }
+    
+    resp, err := client.Get("http://localhost:8080/test")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer resp.Body.Close()
+    
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        log.Fatal(err)
+    }
+    
+    fmt.Printf("Response (HTTP/%d.%d): %s", 
+        resp.ProtoMajor, resp.ProtoMinor, body)
+}
+```
+
+**Important:** Both client and server implementations support H2C with Prior Knowledge only. The HTTP/1.1 to H2C upgrade mechanism is deprecated and the Go team will not support it. See [golang/go#72039](https://github.com/golang/go/issues/72039) for more details.
+
+---
+
+### Legacy Approach (Go < 1.24)
+
+For Go versions before 1.24, H2C support requires the `golang.org/x/net/http2/h2c` package and workarounds. The following documentation describes the legacy approach:
+
 Since the internet failed me, and the only workable example of a H2C client I
 can find was in the actual go code test suite I'm going to lay out what I
 discovered about H2C support in golang here.
